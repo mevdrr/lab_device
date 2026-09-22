@@ -28,6 +28,10 @@ public:
     void addOutput(std::shared_ptr<Stream> stream);
     const std::vector<std::shared_ptr<Stream>>& getInputs() const noexcept;
     const std::vector<std::shared_ptr<Stream>>& getOutputs() const noexcept;
+    /** True only after a successful update in the current calculation pass. */
+    bool isCalculated() const noexcept;
+    /** Start a new calculation pass; stream values are retained. */
+    void resetCalculated() noexcept;
     void updateOutputs();
 protected:
     Device(std::size_t input_count, std::size_t output_count);
@@ -37,6 +41,7 @@ protected:
 private:
     std::size_t input_amount_;
     std::size_t output_amount_;
+    bool calculated_ = false;
 };
 
 /** Mixer: N inputs, one output containing the sum of their mass flows. */

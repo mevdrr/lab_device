@@ -29,6 +29,7 @@ void Device::addInput(std::shared_ptr<Stream> stream) {
     }
     if (inputs.size() >= input_amount_) throw std::length_error("Input stream limit");
     inputs.push_back(std::move(stream));
+    resetCalculated();
 }
 void Device::addOutput(std::shared_ptr<Stream> stream) {
     if (!stream) throw std::invalid_argument("Output stream cannot be null");
@@ -37,6 +38,7 @@ void Device::addOutput(std::shared_ptr<Stream> stream) {
     }
     if (outputs.size() >= output_amount_) throw std::length_error("Output stream limit");
     outputs.push_back(std::move(stream));
+    resetCalculated();
 }
 const std::vector<std::shared_ptr<Stream>>& Device::getInputs() const noexcept {
     return inputs;
@@ -44,11 +46,16 @@ const std::vector<std::shared_ptr<Stream>>& Device::getInputs() const noexcept {
 const std::vector<std::shared_ptr<Stream>>& Device::getOutputs() const noexcept {
     return outputs;
 }
+bool Device::isCalculated() const noexcept { return calculated_; }
+void Device::resetCalculated() noexcept { calculated_ = false; }
+
 void Device::updateOutputs() {
+    resetCalculated();
     if (inputs.size() != input_amount_ || outputs.size() != output_amount_) {
         throw std::logic_error("Connect all required streams before calculation");
     }
     calculateOutputs();
+    calculated_ = true;
 }
 
 Mixer::Mixer(int input_count)

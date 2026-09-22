@@ -1,0 +1,9 @@
+/build*/
+/coverage/
+/.tools/
+*.exe
+*.out
+*.gcda
+*.gcno
+*.gcov
+__pycache__/

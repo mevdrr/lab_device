@@ -1,0 +1,97 @@
+name: C++ tests and coverage
+
+on:
+  push:
+    branches-ignore: [coverage-variant-12]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build --config Debug --parallel 2
+      - name: GoogleTest
+        run: ctest --test-dir build -C Debug --output-on-failure --output-junit test-results.xml
+      - name: Run demonstration
+        shell: bash
+        run: |
+          if [ -x build/Debug/lab_demo.exe ]; then
+            build/Debug/lab_demo.exe
+          else
+            build/lab_demo
+          fi
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}
+          path: build/test-results.xml
+          if-no-files-found: warn
+
+  sanitize:
+    name: Address and undefined behavior sanitizers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_SANITIZERS=ON
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+  coverage:
+    name: Coverage and badge
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-coverage.txt
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure --output-junit test-results.xml
+      - name: Measure library coverage and require at least 95 percent of lines
+        run: |
+          mkdir -p coverage
+          python -m gcovr --root . --filter '(device|recycle)\.(cpp|hpp)$' \
+            --exclude-unreachable-branches --exclude-throw-branches \
+            --html-details coverage/index.html --json-summary coverage/summary.json \
+            --xml coverage/cobertura.xml --print-summary --fail-under-line 95
+          python scripts/coverage_badge.py coverage/summary.json coverage/coverage.svg
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            build/test-results.xml
+          if-no-files-found: warn
+      - name: Publish badge from successful pushes in the student fork
+        if: >-
+          github.event_name == 'push' &&
+          github.repository == 'mevdrr/lab_device' &&
+          (github.ref == 'refs/heads/variant-12-recycle' || github.ref == 'refs/heads/main')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python scripts/publish_coverage.py
